@@ -1,0 +1,72 @@
+name: Deploy pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  Build-and-Release:
+    name: Build and push Docker image
+    runs-on: ubuntu-latest
+    outputs:
+      docker-image-tag: ${{ env.DOCKER_IMAGE_TAG }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure image name for prisma scan
+        run: |
+          echo "DOCKER_IMAGE_TAG=${GITHUB_SHA:0:7}" >> $GITHUB_ENV
+#      - name: Build Docker image
+#        run: |
+#          docker build -t docker-registry-url/your-service:${{ env.DOCKER_IMAGE_TAG }} .
+#      - name: Push Docker image
+#        run: |
+#          docker push docker-registry-url/your-service:${{ env.DOCKER_IMAGE_TAG }}
+
+  Deployment-Main:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: PROD
+    timeout-minutes: 10
+    needs: Build-and-Release
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          docker-image: "docker-registry-url/your-service:${{ needs.Build-and-Release.outputs.docker-image-tag }}"
+          namespace: fbm-wms-cdt
+          k8s-secret: 'secret'
+          manifest-path: ./k8s/manifest.yaml
+          k8s-url: 'url'
+
+  Deployment-Feature-Branch:
+    runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/main'
+    environment: PROD
+    timeout-minutes: 10
+    needs: Build-and-Release
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Build feature branch prefix
+        id: build-feature-branch-prefix
+        run: |
+          BRANCH_NAME=$(echo "$GITHUB_HEAD_REF" | sed 's/[^a-zA-Z0-9-]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "FEATURE_BRANCH_PREFIX=${BRANCH_NAME}-feature-" >> $GITHUB_ENV
+
+      - name: Deploy
+        uses: ./.github/actions/deploy
+        with:
+          docker-image: "docker-registry-url/your-service:${{ needs.build.outputs.commit-hash }}"
+          namespace: fbm-wms-cdt
+          k8s-secret: 'secret'
+          manifest-path: ./k8s/manifest.yaml
+          k8s-url: 'url'
+          feature-branch-prefix: ${{ env.FEATURE_BRANCH_PREFIX }}

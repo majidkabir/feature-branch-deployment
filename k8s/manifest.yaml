@@ -1,0 +1,55 @@
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${FEATURE_BRANCH_PREFIX}your-service
+  labels:
+    app: ${FEATURE_BRANCH_PREFIX}your-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ${FEATURE_BRANCH_PREFIX}your-service
+  template:
+    metadata:
+      labels:
+        app: ${FEATURE_BRANCH_PREFIX}your-service
+    spec:
+      containers:
+        - name: your-service
+          image: ${DOCKER_IMAGE}
+          ports:
+            - containerPort: 8080
+---
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${FEATURE_BRANCH_PREFIX}your-service
+  labels:
+    app: ${FEATURE_BRANCH_PREFIX}your-service
+spec:
+  selector:
+    app: ${FEATURE_BRANCH_PREFIX}your-service
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+---
+# ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ${PREFIX}-your-service-ingress
+spec:
+  rules:
+    - host: ${FEATURE_BRANCH_PREFIX}your-service.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ${FEATURE_BRANCH_PREFIX}your-service
+                port:
+                  number: 80
