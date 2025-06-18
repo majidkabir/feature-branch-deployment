@@ -8,15 +8,6 @@ inputs:
   docker-image:
     description: "Image tag to be replaced in deployment"
     required: true
-  namespace:
-    description: "Namespace to deploy in"
-    required: true
-  k8s-url:
-    description: "Kubernetes API URL for the cluster"
-    required: true
-  k8s-secret:
-    description: "Kubernetes secret containing the kubeconfig for the cluster"
-    required: true
   feature-branch-prefix:
     description: "Prefix for feature branch deployment (minimum 6 characters)"
     required: false
@@ -39,22 +30,11 @@ runs:
             process.exit(1);
           }
 
-    - name: Adding prefix to objects in kustomize to create a full deployment for feature branch
-      if: github.event_name == 'pull_request' && inputs.feature-branch-prefix
-      shell: bash
-      run: |
-        FEATURE_BRANCH_PREFIX="${{ inputs.feature-branch-prefix }}"
-        # Safety check: Ensure prefix length is greater than 5 characters to avoid accidental deletion in cleanup
-        if [ ${#FEATURE_BRANCH_PREFIX} -le 5 ]; then
-          echo "Error: FEATURE_BRANCH_PREFIX is too short. Aborting deletion for safety."
-          exit 1
-        fi
-        
-        echo "FEATURE_BRANCH_PREFIX=$FEATURE_BRANCH_PREFIX" >> $GITHUB_ENV
-        echo "DOCKER_IMAGE=${{ inputs.docker-image }}" >> $GITHUB_ENV
-
     - name: Replacing the environment variables in manifest file
       shell: bash
+      env:
+        FEATURE_BRANCH_PREFIX: ${{ inputs.feature-branch-prefix }}
+        DOCKER_IMAGE: ${{ inputs.docker-image }}
       run: |
         envsubst < "${{ inputs.manifest-path }}" > "${{ inputs.manifest-path }}.tmp" && mv "${{ inputs.manifest-path }}.tmp" "${{ inputs.manifest-path }}"        
 
@@ -64,15 +44,4 @@ runs:
         name: manifests-bundle
         path: ${{ inputs.manifest-path }}
 
-    - name: Set Kubernetes context
-      uses: azure/k8s-set-context@v3
-      with:
-        method: service-account
-        k8s-url: ${{ inputs.k8s-url }}
-        k8s-secret: ${{ inputs.k8s-secret }}
-
-    - name: Deploy baked manifest
-      uses: Azure/k8s-deploy@v5
-      with:
-        namespace: ${{ inputs.namespace }}
-        manifests: ${{ inputs.manifest-path }}
+# Here you need to add steps for deploying the manifest in your cluster.
